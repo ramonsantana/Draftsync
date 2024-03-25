@@ -1,43 +1,48 @@
+from flask import Flask, request
 import requests
 
-# Your Device Magic API token
+app = Flask(__name__)
+
+# Your Device Magic API token, organization ID, and form ID
 api_token = 'YOUR_API_TOKEN'
+org_id = 'YOUR_ORG_ID'
+form_id = 'YOUR_FORM_ID'
 
-# The ID of the form and draft you're working with
-form_id = 'FORM_ID'
-draft_id = 'DRAFT_ID'
+# The URL of your cloud server where the draft will be synced and removed
+cloud_server_url = 'YOUR_CLOUD_SERVER_URL'
 
-# The URL of your cloud server where the draft will be stored
-cloud_server_url = 'CLOUD_SERVER_URL'
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.json
+    # Check if a draft was saved and sync it
+    if data['event'] == 'draft_saved':
+        draft_id = data['data']['draft_id']
+        sync_draft(draft_id)
+    # Check if a draft was submitted and remove it
+    elif data['event'] == 'draft_submitted':
+        draft_id = data['data']['draft_id']
+        remove_draft(draft_id)
+    return '', 200
 
-# Headers for Device Magic API
-headers = {
-    'Authorization': f'Bearer {api_token}',
-    'Content-Type': 'application/json'
-}
-
-# Function to upload or update the draft copy on the cloud server
-def upload_draft_copy():
+def sync_draft(draft_id):
     # Get the draft data from Device Magic
-    response = requests.get(f'https://api.devicemagic.com/organizations/YOUR_ORG_ID/forms/{form_id}/drafts/{draft_id}', headers=headers)
+    response = requests.get(f'https://api.devicemagic.com/organizations/{org_id}/forms/{form_id}/drafts/{draft_id}', headers={'Authorization': f'Bearer {api_token}'})
     draft_data = response.json()
 
-    # Upload the draft data to the cloud server
-    cloud_response = requests.post(cloud_server_url, json=draft_data, headers=headers)
+    # Sync the draft data to the cloud server
+    cloud_response = requests.post(cloud_server_url, json=draft_data)
     if cloud_response.status_code == 200:
-        print('Draft copy uploaded/updated successfully.')
+        print('Draft synced successfully.')
     else:
-        print('Failed to upload/update draft copy.')
+        print('Failed to sync draft.')
 
-# Function to remove the draft copy from the cloud server
-def remove_draft_copy():
-    # Send a delete request to the cloud server
-    cloud_response = requests.delete(f'{cloud_server_url}/{draft_id}', headers=headers)
+def remove_draft(draft_id):
+    # Send a DELETE request to the cloud server to remove the draft
+    cloud_response = requests.delete(f'{cloud_server_url}/{draft_id}')
     if cloud_response.status_code == 200:
-        print('Draft copy removed successfully.')
+        print('Draft removed successfully.')
     else:
-        print('Failed to remove draft copy.')
+        print('Failed to remove draft.')
 
-# Example usage
-upload_draft_copy()
-# Call remove_draft_copy() when the draft is submitted
+if __name__ == '__main__':
+    app.run(debug=True)
